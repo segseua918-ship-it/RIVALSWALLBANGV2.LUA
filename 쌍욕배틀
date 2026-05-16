@@ -2173,7 +2173,7 @@ for k, v in pairs(props) do obj[k] = v end
 return obj
 end
 local mainFrame = mk("Frame", {
-Size = UDim2.fromOffset(300, 230),
+Size = UDim2.fromOffset(300, 280),
 Position = UDim2.fromScale(0.5, 0.5),
 AnchorPoint = Vector2.new(0.5, 0.5),
 BackgroundColor3 = Color3.fromRGB(15, 15, 20),
@@ -2185,6 +2185,35 @@ Parent = botGui
 })
 mk("UICorner", {CornerRadius = UDim.new(0, 14), Parent = mainFrame})
 mk("UIStroke", {Color = Color3.fromRGB(80, 80, 100), Thickness = 1, Transparency = 0.5, Parent = mainFrame})
+
+local trackerFrame = mk("Frame", {
+    Size = UDim2.fromOffset(300, 60),
+    Position = UDim2.fromScale(0.5, 0.1),
+    AnchorPoint = Vector2.new(0.5, 0),
+    BackgroundColor3 = Color3.fromRGB(15, 15, 20),
+    BackgroundTransparency = 0.2,
+    BorderSizePixel = 0,
+    Active = true,
+    Draggable = true,
+    Visible = false,
+    Parent = botGui
+})
+mk("UICorner", {CornerRadius = UDim.new(0, 14), Parent = trackerFrame})
+mk("UIStroke", {Color = Color3.fromRGB(255, 50, 50), Thickness = 1.5, Parent = trackerFrame})
+local trackerLabel = mk("TextLabel", {
+    Size = UDim2.new(1, -20, 1, -20),
+    Position = UDim2.fromOffset(10, 10),
+    BackgroundTransparency = 1,
+    TextColor3 = Color3.fromRGB(255, 100, 100),
+    TextSize = 14,
+    Font = Enum.Font.GothamBold,
+    Text = "타겟 대기중...",
+    TextWrapped = true,
+    TextXAlignment = Enum.TextXAlignment.Center,
+    TextYAlignment = Enum.TextYAlignment.Center,
+    Parent = trackerFrame
+})
+
 local rainbowColors = ColorSequence.new({
 ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
 ColorSequenceKeypoint.new(0.1, Color3.fromRGB(255, 127, 0)),
@@ -2272,22 +2301,38 @@ TweenService:Create(knobGrad, TweenInfo.new(3, Enum.EasingStyle.Linear, Enum.Eas
 Rotation = 360
 }):Play()
 local dragging = false
-sliderBg.MouseButton1Down:Connect(function() dragging = true end)
-sliderKnob.MouseButton1Down:Connect(function() dragging = true end)
+local function updateSlider(input)
+    local relativeX = input.Position.X - sliderBg.AbsolutePosition.X
+    local percentage = math.clamp(relativeX / sliderBg.AbsoluteSize.X, 0.05, 1)
+    TweenService:Create(sliderFill, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Size = UDim2.fromScale(percentage, 1)
+    }):Play()
+    currentSpeed = math.floor(percentage * 10)
+    if currentSpeed < 1 then currentSpeed = 1 end
+    speedLabel.Text = "속도: " .. currentSpeed
+end
+
+sliderBg.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        updateSlider(input)
+    end
+end)
+sliderKnob.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        updateSlider(input)
+    end
+end)
 UserInputService.InputEnded:Connect(function(input)
-if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
 end)
 UserInputService.InputChanged:Connect(function(input)
-if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-local relativeX = input.Position.X - sliderBg.AbsolutePosition.X
-local percentage = math.clamp(relativeX / sliderBg.AbsoluteSize.X, 0.05, 1)
-TweenService:Create(sliderFill, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-Size = UDim2.fromScale(percentage, 1)
-}):Play()
-currentSpeed = math.floor(percentage * 10)
-if currentSpeed < 1 then currentSpeed = 1 end
-speedLabel.Text = "속도: " .. currentSpeed
-end
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        updateSlider(input)
+    end
 end)
 local toggleBtn = mk("TextButton", {
 Size = UDim2.new(1, -40, 0, 40),
@@ -2319,14 +2364,20 @@ toggleBtn.Text = "정지"
 btnStroke.Color = Color3.fromRGB(255, 0, 128)
 task.spawn(function()
 while isRunning do
-local msg = messages[currentIndex]
-currentIndex = currentIndex + 1
-if currentIndex > #messages then currentIndex = 1 end
-local rand = math.random(1, 100)
-if rand <= 30 then
-msg = "/" .. msg
-elseif rand <= 40 then
-msg = msg .. "a"
+local msg
+if nextCustomMessage then
+    msg = nextCustomMessage
+    nextCustomMessage = nil
+else
+    msg = messages[currentIndex]
+    currentIndex = currentIndex + 1
+    if currentIndex > #messages then currentIndex = 1 end
+    local rand = math.random(1, 100)
+    if rand <= 30 then
+        msg = "/" .. msg
+    elseif rand <= 40 then
+        msg = msg .. "a"
+    end
 end
 local strokes = 0
 local lastChar = ""
@@ -2355,6 +2406,46 @@ toggleBtn.Text = "시작"
 btnStroke.Color = Color3.fromRGB(0, 191, 255)
 end
 end)
+
+local nextCustomMessage = nil
+
+local customMsgBox = mk("TextBox", {
+    Size = UDim2.new(1, -90, 0, 35),
+    Position = UDim2.new(0, 20, 0, 215),
+    BackgroundColor3 = Color3.fromRGB(20, 20, 30),
+    TextColor3 = Color3.fromRGB(255, 255, 255),
+    PlaceholderText = "다음 할 말...",
+    TextSize = 14,
+    Font = Enum.Font.Gotham,
+    Text = "",
+    ClearTextOnFocus = false,
+    Parent = mainFrame
+})
+mk("UICorner", {CornerRadius = UDim.new(0, 8), Parent = customMsgBox})
+local boxStroke = mk("UIStroke", {Color = Color3.fromRGB(80, 80, 100), Thickness = 1, Parent = customMsgBox})
+
+local applyBtn = mk("TextButton", {
+    Size = UDim2.new(0, 45, 0, 35),
+    Position = UDim2.new(1, -65, 0, 215),
+    BackgroundColor3 = Color3.fromRGB(0, 191, 255),
+    TextColor3 = Color3.fromRGB(255, 255, 255),
+    TextSize = 14,
+    Font = Enum.Font.GothamBold,
+    Text = "적용",
+    AutoButtonColor = true,
+    Parent = mainFrame
+})
+mk("UICorner", {CornerRadius = UDim.new(0, 8), Parent = applyBtn})
+
+applyBtn.MouseButton1Click:Connect(function()
+    if customMsgBox.Text ~= "" then
+        nextCustomMessage = customMsgBox.Text
+        customMsgBox.Text = ""
+        customMsgBox.PlaceholderText = "예약됨!"
+        task.delay(1.5, function() customMsgBox.PlaceholderText = "다음 할 말..." end)
+    end
+end)
+
 local followBtn = mk("TextButton", {
 Size = UDim2.new(1, -40, 0, 40),
 Position = UDim2.new(0, 20, 0, 165),
@@ -2384,6 +2475,9 @@ local isFollowing = false
 local followHighlight = nil
 local followCircle = nil
 local followConn = nil
+local followTouchConn = nil
+local followGyro = nil
+local chatTrackerConn = nil
 local function cleanupFollow()
 isFollowing = false
 isSelecting = false
@@ -2391,6 +2485,11 @@ followingTarget = nil
 if followHighlight then followHighlight:Destroy(); followHighlight = nil end
 if followCircle then followCircle:Destroy(); followCircle = nil end
 if followConn then followConn:Disconnect(); followConn = nil end
+if followTouchConn then followTouchConn:Disconnect(); followTouchConn = nil end
+if followGyro then followGyro:Destroy(); followGyro = nil end
+if chatTrackerConn then chatTrackerConn:Disconnect(); chatTrackerConn = nil end
+trackerFrame.Visible = false
+trackerLabel.Text = "타겟 대기중..."
 followBtn.Text = "따라가기"
 followStroke.Color = Color3.fromRGB(0, 191, 255)
 end
@@ -2415,14 +2514,37 @@ local RunService = game:GetService("RunService")
 Mouse.Button1Down:Connect(function()
 if isSelecting then
 local target = Mouse.Target
-if target and target.Parent and target.Parent:FindFirstChild("Humanoid") then
-local character = target.Parent
-if character ~= LocalPlayer.Character then
+if target then
+    local character = nil
+    local current = target
+    while current and current ~= workspace do
+        if current:FindFirstChildOfClass("Humanoid") then
+            character = current
+            break
+        end
+        current = current.Parent
+    end
+    
+    if character and character ~= LocalPlayer.Character then
 isSelecting = false
 isFollowing = true
 followingTarget = character
 followBtn.Text = "정지"
 followStroke.Color = Color3.fromRGB(255, 0, 128)
+
+trackerFrame.Visible = true
+trackerLabel.Text = "[" .. character.Name .. "] 대기중..."
+
+local targetPlayer = game:GetService("Players"):GetPlayerFromCharacter(character)
+if targetPlayer then
+    chatTrackerConn = targetPlayer.Chatted:Connect(function(msg)
+        trackerLabel.Text = "[" .. character.Name .. "]: " .. msg
+        TweenService:Create(trackerFrame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, true), {
+            BackgroundTransparency = 0
+        }):Play()
+    end)
+end
+
 followHighlight = Instance.new("Highlight")
 followHighlight.FillColor = Color3.fromRGB(0, 191, 255)
 followHighlight.FillTransparency = 0.5
@@ -2438,6 +2560,24 @@ followCircle.Anchored = true
 followCircle.CanCollide = false
 followCircle.Massless = true
 followCircle.Parent = workspace
+
+local myHrpForTouch = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+local myHumForTouch = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+if myHrpForTouch and myHumForTouch then
+    followTouchConn = myHrpForTouch.Touched:Connect(function(hit)
+        if isFollowing and hit.Parent ~= LocalPlayer.Character and hit.Parent ~= followingTarget and hit.CanCollide then
+            myHumForTouch.Jump = true
+        end
+    end)
+    
+    followGyro = Instance.new("BodyGyro")
+    followGyro.Name = "FollowGyro"
+    followGyro.MaxTorque = Vector3.new(0, 400000, 0)
+    followGyro.P = 3000
+    followGyro.D = 100
+    followGyro.Parent = myHrpForTouch
+end
+
 followConn = RunService.Heartbeat:Connect(function()
 if not followingTarget or not followingTarget.Parent or not followingTarget:FindFirstChild("Humanoid") or followingTarget.Humanoid.Health <= 0 then
 cleanupFollow()
@@ -2449,6 +2589,12 @@ local myHum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Hu
 if hrp and myHrp and myHum then
 followCircle.CFrame = CFrame.new(hrp.Position - Vector3.new(0, 2.5, 0)) * CFrame.Angles(0, 0, math.pi/2)
 local dist = (hrp.Position - myHrp.Position).Magnitude
+
+if followGyro then
+    local targetPos = Vector3.new(hrp.Position.X, myHrp.Position.Y, hrp.Position.Z)
+    followGyro.CFrame = CFrame.lookAt(myHrp.Position, targetPos)
+end
+
 if dist > 8 then
 myHum:MoveTo(hrp.Position)
 else
